@@ -1,24 +1,13 @@
 #!/bin/sh
 #
-# PHP version per instance.
-#
-# An instance is pinned to a PHP version by a .php-version file at the root of its folder. The CLI
-# then uses the binary of this version (use_instance_php) and the web is served by a PHP-FPM pool
-# of this version, one pool per instance, run by PHP-FPM masters that belong to these tools:
-#
-#   <fpmFolder>/<version>/php-fpm.conf        master of the version, includes pools/*.conf
-#   <fpmFolder>/<version>/pools/<suffix>.conf  pool of the instance
-#   <fpmFolder>/sockets/<suffix>.sock          socket of the instance, used by its Apache vhost
-#   ~/Library/LaunchAgents/<label>-<version>.plist  starts the master at login, no sudo
-#
-# Nothing of the Homebrew PHP config (php-fpm.d/www.conf, brew services) nor of httpd.conf is
-# changed, each version keeps its own php.ini and extensions. Changing the version of an instance
-# moves its pool from one master to the other: the socket, so the vhost, stays the same and Apache
-# does not need a restart.
+# PHP version per instance: a .php-version file at the root of the instance selects the PHP of
+# the CLI, and the web is served by a PHP-FPM pool of that version, run by masters of these tools:
+# <fpmFolder>/<version>/php-fpm.conf, <fpmFolder>/<version>/pools/<suffix>.conf,
+# <fpmFolder>/sockets/<suffix>.sock, ~/Library/LaunchAgents/<label>-<version>.plist.
+# The Homebrew PHP configs and httpd.conf are not changed.
 
 fpmLaunchLabel=com.prestashop.ps-install-tools.php-fpm
 
-# Prints the Homebrew prefix (/opt/homebrew on Apple silicon, /usr/local on Intel)
 brew_prefix() {
     if test "$HOMEBREW_PREFIX" != ""; then
         echo "$HOMEBREW_PREFIX"
@@ -27,9 +16,8 @@ brew_prefix() {
     fi
 }
 
-# Prints the Homebrew folder of the PHP version given as argument (8.1, 8.4, ...), returns 1 when
-# this version is not installed. The latest version may only be installed as the php formula (no
-# php@X.Y folder), its folder is used when its version matches.
+# Prints the Homebrew folder of the PHP version given as argument, returns 1 when not installed.
+# The latest version may only be installed as the php formula, without a php@X.Y folder.
 php_folder_for_version() {
     local prefix=$(brew_prefix)
     if test -x "$prefix/opt/php@$1/bin/php"; then
@@ -43,14 +31,12 @@ php_folder_for_version() {
     return 1
 }
 
-# Prints the path of the PHP binary of the version given as argument, returns 1 when not installed
 php_binary_for_version() {
     local folder
     folder=$(php_folder_for_version "$1") || return 1
     echo "$folder/bin/php"
 }
 
-# Prints the path of the PHP-FPM binary of the version given as argument, returns 1 when missing
 php_fpm_binary_for_version() {
     local folder
     folder=$(php_folder_for_version "$1") || return 1
@@ -58,7 +44,6 @@ php_fpm_binary_for_version() {
     echo "$folder/sbin/php-fpm"
 }
 
-# Prints the installed PHP versions, one per line, oldest first
 installed_php_versions() {
     local prefix=$(brew_prefix) folder version
     for folder in "$prefix"/opt/php@* "$prefix/opt/php"; do
@@ -68,21 +53,42 @@ installed_php_versions() {
     done | sort -t. -k1,1n -k2,2n -u
 }
 
-# Prints the PHP version (8.1, 8.4, ...) the instance folder given as argument is pinned to in its
-# .php-version file, nothing when the instance uses the global PHP
 get_instance_php_version() {
     if test -f "$1/.php-version"; then
         head -n 1 "$1/.php-version" | tr -d '[:space:]'
     fi
 }
 
-# Selects the PHP of the current instance, called by set_target_instance. When the instance folder
-# has a .php-version file its PHP binary folder is put first in the PATH, so php, composer, the
-# bin/console shebang and every sub process use this version. Otherwise the global PHP is kept.
-# Sets instancePhpVersion (empty for the global PHP) and instancePhp (path of the binary, empty
-# when the pinned version is not installed, see require_instance_php).
+# Reads --php <version> from the arguments: sets phpVersionOption, and otherArgs to the others
+parse_php_option() {
+    phpVersionOption=""
+    otherArgs=""
+    while test $# -gt 0; do
+        case "$1" in
+            --php)
+                if test "$2" = ""; then
+                    echo "--php needs a version, for example --php 8.4" >&2
+                    return 1
+                fi
+                phpVersionOption=$2
+                shift
+                ;;
+            --php=*)
+                phpVersionOption=${1#--php=}
+                ;;
+            *)
+                otherArgs="$otherArgs $1"
+                ;;
+        esac
+        shift
+    done
+}
+
+# Called by set_target_instance: puts the bin folder of the pinned version first in the PATH, so
+# composer, bin/console and every sub process use it. Sets instancePhpVersion (empty for the
+# global PHP) and instancePhp (empty when the pinned version is not installed).
 use_instance_php() {
-    # Keep the PATH from before the first call, so successive instances do not stack their folders
+    # PATH from before the first call, so successive instances do not stack their folders
     if test "$basePath" = ""; then
         basePath=$PATH
     fi
@@ -99,8 +105,6 @@ use_instance_php() {
     export PATH
 }
 
-# Returns 1 with an error when the PHP version pinned by the instance is not installed, call it
-# before running PHP for the instance
 require_instance_php() {
     if test "$instancePhp" = ""; then
         echo "PHP $instancePhpVersion is required by $targetFolder/.php-version but is not installed (brew install php@$instancePhpVersion)" >&2
@@ -108,8 +112,7 @@ require_instance_php() {
     fi
 }
 
-# Writes the .php-version file of the current instance (version as argument) and selects it.
-# The file is excluded from git locally so it never shows in git status of the PrestaShop clone.
+# Excluded from git so it never shows in git status of the clone
 pin_instance_php() {
     echo "$1" > "$targetFolder/.php-version"
     if test -d "$targetFolder/.git" && ! grep -qx '/.php-version' "$targetFolder/.git/info/exclude" 2>/dev/null; then
@@ -119,7 +122,6 @@ pin_instance_php() {
     use_instance_php
 }
 
-# Removes the .php-version file of the current instance, it goes back to the global PHP
 unpin_instance_php() {
     rm -f "$targetFolder/.php-version"
     use_instance_php
@@ -127,12 +129,10 @@ unpin_instance_php() {
 
 ## PHP-FPM
 
-# Prints the socket of the current instance
 instance_fpm_socket() {
     echo "$fpmFolder/sockets/$suffix.sock"
 }
 
-# Prints the PHP error log of the current instance, next to its Apache logs
 instance_php_log() {
     echo "$HOME/www/var/logs/prestashop-$suffix.php-error.log"
 }
@@ -145,12 +145,11 @@ fpm_launch_plist() {
     echo "$HOME/Library/LaunchAgents/$(fpm_launch_label "$1").plist"
 }
 
-# Returns 0 when the master of the version given as argument is loaded in launchd
 fpm_master_loaded() {
     launchctl print "gui/$(id -u)/$(fpm_launch_label "$1")" > /dev/null 2>&1
 }
 
-# Prints the versions that have at least one pool in fpmFolder, one per line
+# Versions with at least one pool
 fpm_versions() {
     local folder
     for folder in "$fpmFolder"/*/pools; do
@@ -160,8 +159,7 @@ fpm_versions() {
     done
 }
 
-# Prints the version whose master serves the pool of the instance given as argument, nothing
-# when no pool exists for it
+# Version whose master serves the instance given as argument, nothing without a pool
 fpm_pool_version() {
     local version
     for version in $(fpm_versions); do
@@ -172,7 +170,6 @@ fpm_pool_version() {
     done
 }
 
-# Writes the master config and the LaunchAgent of the version given as argument
 write_fpm_master() {
     local version=$1 fpmBinary
     fpmBinary=$(php_fpm_binary_for_version "$version") || {
@@ -213,7 +210,6 @@ EOM
 EOM
 }
 
-# Writes the pool of the current instance in the master of the version given as argument
 write_fpm_pool() {
     local version=$1
     mkdir -p "$fpmFolder/$version/pools" "$(dirname "$(instance_php_log)")"
@@ -232,8 +228,8 @@ php_admin_value[error_log] = $(instance_php_log)
 EOM
 }
 
-# Starts, reloads or stops the master of the version given as argument according to its pools:
-# a master refuses to start without any pool, so it is stopped and its LaunchAgent removed then
+# Starts or reloads the master of the version given as argument, or stops it when it has no pool
+# left: a master refuses to start without any pool
 sync_fpm_master() {
     local version=$1 plist label
     plist=$(fpm_launch_plist "$version")
@@ -256,7 +252,6 @@ sync_fpm_master() {
     fi
 }
 
-# Waits until the socket of the current instance accepts connections (5 seconds at most)
 wait_fpm_socket() {
     local socket=$(instance_fpm_socket) i=0
     while test $i -lt 50; do
@@ -268,7 +263,6 @@ wait_fpm_socket() {
     return 1
 }
 
-# Waits until the previous master released the socket of the current instance (5 seconds at most)
 wait_fpm_socket_gone() {
     local socket=$(instance_fpm_socket) i=0
     while test -S "$socket" && test $i -lt 50; do
@@ -278,8 +272,7 @@ wait_fpm_socket_gone() {
     rm -f "$socket"
 }
 
-# Serves the current instance with the PHP-FPM pool of its pinned version: moves the pool from
-# the previous version if any, then syncs both masters
+# Moves the pool of the current instance to the master of its pinned version
 enable_instance_fpm() {
     local previousVersion
     previousVersion=$(fpm_pool_version "$suffix")
@@ -295,7 +288,6 @@ enable_instance_fpm() {
     wait_fpm_socket
 }
 
-# Removes the PHP-FPM pool of the current instance, whatever its version
 disable_instance_fpm() {
     local previousVersion
     previousVersion=$(fpm_pool_version "$suffix")
@@ -309,36 +301,32 @@ disable_instance_fpm() {
 
 ## Apache
 
-# Prints the vhost lines sending the PHP files of the current instance to its PHP-FPM pool, nothing
-# for an instance using the global PHP (the PHP handler of httpd.conf then applies, as before)
+# Vhost lines sending the PHP files to the pool, nothing for the global PHP (httpd.conf applies).
+# The socket does not depend on the version, so changing the version keeps the vhost.
 php_vhost_handler() {
     if test "$instancePhpVersion" = ""; then
         return
     fi
-    # The socket path is the same whatever the version, so changing the version keeps the vhost
     cat <<EOM
-    # PHP of the instance (.php-version), served by its ps-install-tools PHP-FPM pool
+    # PHP-FPM pool of the instance (ps-php)
     <FilesMatch \.php$>
         SetHandler "proxy:unix:$(instance_fpm_socket)|fcgi://$suffix"
     </FilesMatch>
-    # Long back office requests (module install, upgrade) go beyond the default 60 seconds
+    # Module installs and upgrades take more than 60 seconds
     ProxyTimeout 600
 EOM
 }
 
-# Replaces the PHP handler of the vhost file given as argument by the one of the current instance,
-# the other lines (domains changed by ps-ngrok for example) are kept
+# Replaces the PHP handler of the vhost file given as argument, keeps the other lines (ps-ngrok domains)
 update_vhost_php_handler() {
     PHP_HANDLER="$(php_vhost_handler)" awk '
-        /# PHP of the instance \(\.php-version\)/ { skip = 1 }
+        /# PHP(-FPM pool)? of the instance/ { skip = 1 }
         skip { if (/ProxyTimeout/) skip = 0; next }
         /<\/VirtualHost>/ && ENVIRON["PHP_HANDLER"] != "" { print ENVIRON["PHP_HANDLER"] }
         { print }
     ' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
 }
 
-# Returns 0 when the vhost file given as argument matches the PHP of the current instance:
-# it has the handler of its pool when it is pinned, it has none when it uses the global PHP
 vhost_php_up_to_date() {
     if test "$instancePhpVersion" = ""; then
         ! grep -q "proxy:unix:" "$1"
@@ -347,13 +335,10 @@ vhost_php_up_to_date() {
     fi
 }
 
-# Returns 0 when Apache loads mod_proxy_fcgi, required to serve an instance with PHP-FPM
 apache_has_proxy_fcgi() {
     "$(brew_prefix)/bin/apachectl" -M 2>/dev/null | grep -q 'proxy_fcgi_module'
 }
 
-# Returns 1 with an error when the PHP version given as argument cannot serve an instance: invalid
-# format, not installed with php-fpm, or Apache without mod_proxy_fcgi
 check_php_requirements() {
     if ! echo "$1" | grep -qE '^[0-9]+\.[0-9]+$'; then
         echo "Invalid PHP version $1, expected <major>.<minor> (use ps-php <suffix> global to go back to the global PHP)" >&2
@@ -369,15 +354,11 @@ check_php_requirements() {
     fi
 }
 
-# Prints what to do when mod_proxy_fcgi is missing
 print_apache_fpm_requirements() {
     cat >&2 <<EOM
-Apache does not load mod_proxy_fcgi, it is needed to serve an instance with its own PHP version.
-Uncomment these lines in $(brew_prefix)/etc/httpd/httpd.conf and restart Apache:
+Apache needs mod_proxy_fcgi to serve an instance with its own PHP version. Uncomment these lines
+in $(brew_prefix)/etc/httpd/httpd.conf, restart Apache, then run ps-php doctor:
     LoadModule proxy_module lib/httpd/modules/mod_proxy.so
     LoadModule proxy_fcgi_module lib/httpd/modules/mod_proxy_fcgi.so
-mod_php (if you use it) can stay loaded: instances without .php-version keep using it. Check that
-the global PHP handler of your httpd.conf does not change when proxy_fcgi_module is loaded
-(an <IfModule proxy_fcgi_module> block for example), then run ps-php doctor.
 EOM
 }

@@ -17,7 +17,7 @@ Imported from `~/.claude/CLAUDE.md` on machines used for PrestaShop development.
 | BO login | `email` / `password` of `ps-install-tools/config.yml`, printed by `ps-infos` |
 | Admin API client | `apiClientId` / `apiClientSecret` of `config.yml` (defaults `test` / `18c7b983c2eaa22a111609ce2b1c435e`), all scopes, printed by `ps-infos` |
 
-Web stack: Homebrew Apache (`httpd`) on port 80, MySQL via brew services. PHP is global by default (`php` of the PATH, PHP handler of `httpd.conf`); an instance pinned with `ps-php <s> <version>` has a `.php-version` file, the tools then use that version for the CLI and serve it with its own PHP-FPM pool. opcache revalidates file timestamps, so code changes are live without restarting Apache; only a new vhost needs a restart. Other folders under `~/www` that do not follow the `prestashop-<s>` pattern are not driven by the tools.
+Web stack: Homebrew Apache (`httpd`) on port 80, MySQL via brew services. PHP is global by default; an instance pinned with `ps-php <s> <version>` has a `.php-version` file and its own PHP-FPM pool. opcache revalidates file timestamps, so code changes are live without restarting Apache; only a new vhost needs a restart. Other folders under `~/www` that do not follow the `prestashop-<s>` pattern are not driven by the tools.
 
 ## Detect the current instance
 
@@ -41,7 +41,7 @@ Aliases from `ps-install-tools/aliases.sh`, also callable by full path `~/dev/ps
 | `ps-reset <s>` | Drop the DB, reload `<folder>/var/dump.sql`, clear cache | fastest way back to a clean state |
 | `ps-install-module <s> <folder\|zip>` | Copy a module into the instance and install it | |
 | `ps-upgrade <s>` | Run the upgrade module from the BO (Playwright) | |
-| `ps-php [<s>] [<version> \| global]` | Show the PHP of an instance, pin it to `<version>` (writes `.php-version`, moves its PHP-FPM pool, clears cache) or back to `global`. `ps-php doctor` checks versions, Apache `mod_proxy_fcgi`, PHP-FPM masters, pools and instances | read-only without version. Changing between two versions needs no sudo; the first pin and `global` rewrite the vhost and restart Apache (sudo). Run `composer install` when it reports the vendors do not support the version |
+| `ps-php [<s>] [<version> \| global]` | Show the PHP of an instance, pin it to `<version>` (`.php-version` and PHP-FPM pool) or back to `global`. `ps-php doctor` checks the setup | read-only without version. sudo for the first pin and for `global`. Run `composer install` when it says the vendors do not support the version |
 | `ps-ngrok <s>` | Expose the instance through ngrok (rewrites vhost, `.htaccess`, shop domain in DB) | sudo, changes the shop domain |
 | `ps-uninstall <s> [<s2> ...]` | Delete folder, DB, test DB, PHP-FPM pool, vhost, hosts entry of every listed instance | Accepts several suffixes separated by spaces, uninstalled one after the other (one confirmation, one Apache stop/restart, one `/etc/hosts` cleanup, so at most two sudo dialogs). DESTRUCTIVE: removes the working copies and any uncommitted work. Always confirm with the developer first |
 

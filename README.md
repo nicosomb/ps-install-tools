@@ -25,7 +25,7 @@ Source `aliases.sh` from your shell profile to get the `ps-*` aliases, or call t
 | Command | What it does |
 | --- | --- |
 | `ps-infos [--json] <s>` | Read-only report: URLs, DBs (existence), folder, git branch, PrestaShop version, dump, vhost, hosts entry, HTTP status, PHP versions, BO login. `--json` prints the same data as JSON for scripts and agents |
-| `ps-list [--json]` | Lists every instance found under `${baseFolder}*` (one line each: branch, version, HTTP status, PHP of the instance, URL) and writes an HTML report to `~/www/instances.html`. `--json` prints a JSON array of `ps-infos --json` objects instead |
+| `ps-list [--json]` | One line per instance and an HTML report in `~/www/instances.html`, or a JSON array of `ps-infos --json` objects |
 | `ps-install <s> [branch \| user:branch] [--php <version>]` | Create or update an instance: clone, checkout, composer install, assets build, `tests/UI/.env`, vhost, `/etc/hosts`, DB install, dump, cache warmup |
 | `ps-install-multi-shop <s> [branch]` | `ps-install` then multistore data |
 | `ps-install-classic <s> [version] [--php <version>]` | Build the Classic Edition `<version>` with `smb_edition_builder` (menu of the available versions when omitted or unknown), uninstall the instance if it exists (in the background while the build runs), move the release to the instance folder and `ps-install` it (see below) |
@@ -77,7 +77,7 @@ Keys in `config.yml`:
 
 ## PHP version per instance
 
-By default every instance uses the global PHP: `php` of the PATH for the CLI, the PHP handler of `httpd.conf` (mod_php or PHP-FPM, whatever you use) for the web. An instance can be pinned to its own PHP version, for the CLI and the web:
+By default an instance uses the global PHP (`php` of the PATH, PHP handler of `httpd.conf`). It can be pinned to its own version, for the CLI and the web:
 
 ```bash
 ps-install 178 1.7.8.x --php 7.4          # new instance on PHP 7.4
@@ -88,14 +88,11 @@ ps-php develop global                     # back to the global PHP
 ps-php doctor                             # check versions, Apache, PHP-FPM masters, pools and instances
 ```
 
-- **CLI**: the version is stored in a `.php-version` file at the root of the instance (excluded from git in `.git/info/exclude`). The scripts put `$(brew --prefix)/opt/php@<version>/bin` first in the PATH, so `composer install`, the install CLI, `bin/console` and every sub process run with this version.
-- **Web**: the instance gets its own PHP-FPM pool (`pm = ondemand`, no process while idle) listening on `<fpmFolder>/sockets/<s>.sock`, and its vhost sends the PHP files to this socket. The pools are run by one PHP-FPM master per version owned by these tools (`<fpmFolder>/<version>/php-fpm.conf`, started at login by `~/Library/LaunchAgents/com.prestashop.ps-install-tools.php-fpm-<version>.plist`, no sudo). A master runs only while it serves at least one pool. PHP errors go to `~/www/var/logs/prestashop-<s>.php-error.log`.
-- Changing the version of a pinned instance moves its pool from one master to the other: the socket and the vhost stay the same, so Apache is not restarted and no sudo is needed. Only the first pin and the return to `global` rewrite the vhost and restart Apache.
-- Nothing of your own setup is changed: Homebrew PHP configs (`php-fpm.d/www.conf`, `brew services`) and `httpd.conf` are left as they are, each version keeps its `php.ini` and extensions (install the extensions you need, xdebug for example, for every version you pin).
+- **CLI**: the version is stored in `.php-version` at the root of the instance (excluded from git). The scripts put the bin folder of `php@<version>` first in the PATH, so `composer`, `bin/console` and every sub process use it.
+- **Web**: the instance gets its own PHP-FPM pool on `<fpmFolder>/sockets/<s>.sock`, run by one master per version started at login by a LaunchAgent (no sudo). PHP errors go to `~/www/var/logs/prestashop-<s>.php-error.log`.
+- Moving between two versions keeps the socket, so Apache is not restarted. Only the first pin and the return to `global` change the vhost and restart Apache.
 
-Requirements: the PHP version installed with Homebrew (`brew install php@8.1`, older versions from the `shivammathur/php` tap) and Apache loading `mod_proxy` and `mod_proxy_fcgi`. mod_php can stay loaded, instances without `.php-version` keep using it, but check that the global PHP handler of your `httpd.conf` does not depend on `proxy_fcgi_module` being loaded (an `<IfModule proxy_fcgi_module>` block switching every vhost to a PHP-FPM socket for example). `ps-php doctor` checks the module and requests every instance.
-
-`fpmFolder` in `config.yml` sets the folder of the masters, pools and sockets (default `$HOME/www/var/php-fpm`, keep it short: a socket path is limited to 104 characters on macOS).
+Requirements: `brew install php@<version>` (older versions from the `shivammathur/php` tap; each version has its own extensions, xdebug included) and Apache loading `mod_proxy` and `mod_proxy_fcgi`. mod_php can stay loaded for the other instances, as long as the global PHP handler of `httpd.conf` does not depend on `proxy_fcgi_module`. `ps-php doctor` checks the setup. `fpmFolder` in `config.yml` sets where masters, pools and sockets go (default `$HOME/www/var/php-fpm`, keep it short: socket paths are limited to 104 characters).
 
 ## sudo
 

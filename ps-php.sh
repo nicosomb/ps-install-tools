@@ -1,12 +1,7 @@
 #!/bin/sh
 #
-# Usage:
-#   ps-php [suffix]               Show the PHP of the instance
-#   ps-php [suffix] <version>     Pin the instance to PHP <version>: CLI and PHP-FPM pool
-#   ps-php [suffix] global        Back to the global PHP (php of the PATH, PHP handler of httpd.conf)
-#   ps-php doctor                 Check the PHP versions, Apache, the PHP-FPM masters and pools
-#
-# The suffix is detected from the current folder when omitted. See tools/php.sh for the layout.
+# Shows or changes the PHP version of an instance, see usage below and tools/php.sh.
+# The suffix is detected from the current folder when omitted.
 
 BASEDIR=$(dirname "$0")
 
@@ -177,7 +172,6 @@ else
     previousVersion=$instancePhpVersion
     pin_instance_php "$target"
     if ! enable_instance_fpm; then
-        # Never leave the CLI on a version the web does not serve
         echo "Could not serve $suffix with PHP-FPM $target, going back to ${previousVersion:-the global PHP}" >&2
         if test "$previousVersion" = ""; then
             disable_instance_fpm
@@ -190,7 +184,7 @@ else
     fi
 fi
 
-# The vhost only changes when the instance goes from the global PHP to a pinned one or back
+# Only the first pin and the return to global change the vhost
 vhostFilePath="/opt/homebrew/etc/httpd/extra/sites-available/$targetDomain.conf"
 if test -f "$vhostFilePath" && ! vhost_php_up_to_date "$vhostFilePath"; then
     echo "Updating the PHP handler of the vhost $vhostFilePath"
@@ -200,7 +194,6 @@ fi
 
 clear_cache
 
-# Vendors installed with another PHP version may not run with this one
 if test -f vendor/composer/platform_check.php && ! php vendor/composer/platform_check.php > /dev/null 2>&1; then
     echo "The vendors do not support PHP $(php -r 'echo PHP_VERSION;'), run composer install in $targetFolder" >&2
 fi

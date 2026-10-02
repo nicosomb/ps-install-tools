@@ -5,34 +5,13 @@ echo
 
 BASEDIR=$(dirname "$0")
 
-# --php <version> pins the PHP version of the instance (.php-version), the other arguments are
-# the suffix and the branch
-phpVersionOption=""
-args=""
-while test $# -gt 0; do
-    case "$1" in
-        --php)
-            if test "$2" = ""; then
-                echo "--php needs a version, for example --php 8.4" >&2
-                exit 1
-            fi
-            phpVersionOption=$2
-            shift
-            ;;
-        --php=*)
-            phpVersionOption=${1#--php=}
-            ;;
-        *)
-            args="$args $1"
-            ;;
-    esac
-    shift
-done
-set -- $args
+# --php <version> pins the PHP version of the instance
+source $BASEDIR/tools/php.sh
+parse_php_option "$@" || exit 1
+set -- $otherArgs
 
 source $BASEDIR/tools/config.sh
 
-# Check the PHP requirements before anything long happens
 requestedPhpVersion=$phpVersionOption
 if test "$requestedPhpVersion" = ""; then
     requestedPhpVersion=$instancePhpVersion
@@ -198,7 +177,7 @@ stepsIndex=$(($stepsIndex+1))
 # 2- Run composer install
 echo "$stepsIndex / $stepsNb: Install vendors"
 cd $targetFolder
-# The folder may have just been created, pin the requested PHP or select the one of its .php-version file
+# The folder may have just been created
 if test "$phpVersionOption" != ""; then
     pin_instance_php "$phpVersionOption"
 else

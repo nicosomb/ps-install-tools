@@ -2,10 +2,8 @@
 #
 # Usage: ps-list [--json]
 #
-# Lists every local instance (one per ${baseFolder}<suffix> folder) by
-# calling ps-infos on each. Text by default, one line per instance, plus an
-# HTML report written to ~/www/instances.html. `--json` prints a JSON array
-# of the same objects ps-infos --json produces, for scripts and agents.
+# Runs ps-infos on every instance: one line each and an HTML report in ~/www/instances.html,
+# or a JSON array of ps-infos --json objects with --json.
 
 BASEDIR=$(dirname "$0")
 source $BASEDIR/tools/tools.sh
@@ -55,12 +53,11 @@ for suffix in $suffixes; do
     url=$(field "$out" "Project url")
     adminUrl=$(field "$out" "Project admin url")
     http=$(field "$out" "HTTP status (FO)")
-    # Global PHP: version of mod_php when ps-infos found one in httpd.conf
+    # mod_php version, when httpd.conf loads it
     phpGlobal=$(field "$out" "PHP (web)" | sed -n 's/.*(mod_php \([0-9.]*\)).*/\1/p')
     folder=$(field "$out" "Project folder")
     rm -f "$out"
 
-    # PHP of the instance: the version of its .php-version file served by its PHP-FPM pool, or the global PHP
     set_target_instance "$suffix"
     phpClass="ok"
     if test "$instancePhpVersion" = ""; then
@@ -112,8 +109,8 @@ cat > "$htmlOut" <<HTML
 </style>
 </head>
 <body>
-<h1>PrestaShop instances (ps-install-tools)</h1>
-<div class="meta">$count instance(s) under $baseFolder* &middot; generated $generatedAt &middot; regenerate with <code>ps-list</code></div>
+<h1>PrestaShop instances</h1>
+<div class="meta">$count instance(s) under $baseFolder* &middot; generated $generatedAt</div>
 <table>
 <thead><tr><th>Suffix</th><th>Branch</th><th>Version</th><th>Links</th><th>PHP</th><th>Folder</th></tr></thead>
 <tbody>

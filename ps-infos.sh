@@ -69,7 +69,7 @@ if test $vhostEnabled = 1; then
     accessLog=$(sed -n 's/.*CustomLog "\(.*\)" .*/\1/p' "$vhostFile" | head -n 1)
 fi
 apachePhp=$(sed -n 's#^LoadModule php_module .*/php@\([0-9.]*\)/.*#\1#p' /opt/homebrew/etc/httpd/httpd.conf 2>/dev/null | head -n 1)
-# php is the one of the instance: use_instance_php put its .php-version binary first in the PATH
+# PHP of the instance, see use_instance_php
 cliPhp=$(php -r 'echo PHP_VERSION;' 2>/dev/null)
 fpmPoolVersion=$(fpm_pool_version "$suffix")
 fpmSocket=""

@@ -25,7 +25,7 @@ usage() {
     echo "ps-install-classic classic 9.2.x           Build config_classic_9.2.x.yml and install it as the 'classic' instance"
     echo "ps-install-classic classic-828 8.2.8       Build config_classic_8.2.8.yml and install it as the 'classic-828' instance"
     echo "ps-install-classic classic-91 9.1.5-5.0    Build config_classic_9.1.5-5.0.yml and install it as the 'classic-91' instance"
-    echo "ps-install-classic classic 9.2.x --php 8.4 Same, the instance runs PHP 8.4 (default: the .php-version of the replaced instance)"
+    echo "ps-install-classic classic 9.2.x --php 8.4 Same, on PHP 8.4"
 }
 
 fail() {
@@ -33,28 +33,10 @@ fail() {
     exit 1
 }
 
-# --php <version> is given to ps-install, the other arguments are the suffix and the version
-phpVersionOption=""
-args=""
-while test $# -gt 0; do
-    case "$1" in
-        --php)
-            if test "$2" = ""; then
-                fail "--php needs a version, for example --php 8.4"
-            fi
-            phpVersionOption=$2
-            shift
-            ;;
-        --php=*)
-            phpVersionOption=${1#--php=}
-            ;;
-        *)
-            args="$args $1"
-            ;;
-    esac
-    shift
-done
-set -- $args
+# --php <version> is given to ps-install
+source "$(dirname "$0")/tools/php.sh"
+parse_php_option "$@" || exit 1
+set -- $otherArgs
 
 if test $# -lt 1 || test $# -gt 2; then
     usage >&2
@@ -68,13 +50,12 @@ echo
 BASEDIR=$(cd "$(dirname "$0")" && pwd)
 source $BASEDIR/tools/config.sh
 version=$2
-# The replaced instance keeps its PHP version unless another one is asked
+# The replaced instance keeps its PHP version by default
 phpVersion=${phpVersionOption:-$instancePhpVersion}
 # The builder runs with the global PHP, not the one of the replaced instance
 PATH=$basePath
 
 ## Checks before anything is touched
-# ps-install checks the PHP version too, but only once the instance is uninstalled and built
 if test "$phpVersion" != ""; then
     check_php_requirements "$phpVersion" || exit 1
 fi
