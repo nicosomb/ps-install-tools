@@ -34,6 +34,10 @@ if test "$requestedPhpVersion" = ""; then
     requestedPhpVersion=$instancePhpVersion
 fi
 if test "$requestedPhpVersion" != ""; then
+    if ! echo "$requestedPhpVersion" | grep -qE '^[0-9]+\.[0-9]+$'; then
+        echo "Invalid PHP version $requestedPhpVersion, expected <major>.<minor> (use ps-php <suffix> global to go back to the global PHP)" >&2
+        exit 1
+    fi
     if ! php_fpm_binary_for_version "$requestedPhpVersion" > /dev/null; then
         echo "PHP $requestedPhpVersion with php-fpm is not installed (brew install php@$requestedPhpVersion), installed versions: $(installed_php_versions | xargs)" >&2
         exit 1

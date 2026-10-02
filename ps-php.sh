@@ -200,4 +200,4 @@ if test -f vendor/composer/platform_check.php && ! php vendor/composer/platform_
 fi
 
 status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$targetUrl/")
-echo "PHP $(php -r 'echo PHP_VERSION;') for $suffix, front office answers HTTP $status"
+echo "$suffix: CLI PHP $(php -r 'echo PHP_VERSION;'), front office answers HTTP $status"
