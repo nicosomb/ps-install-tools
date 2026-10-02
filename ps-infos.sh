@@ -69,6 +69,7 @@ if test $vhostEnabled = 1; then
     accessLog=$(sed -n 's/.*CustomLog "\(.*\)" .*/\1/p' "$vhostFile" | head -n 1)
 fi
 apachePhp=$(sed -n 's#^LoadModule php_module .*/php@\([0-9.]*\)/.*#\1#p' /opt/homebrew/etc/httpd/httpd.conf 2>/dev/null | head -n 1)
+# php is the one of the instance: use_instance_php put its .php-version binary first in the PATH
 cliPhp=$(php -r 'echo PHP_VERSION;' 2>/dev/null)
 
 ## Output
@@ -115,6 +116,8 @@ if test $json = 1; then
   "access_log": $(json_string "$accessLog"),
   "php_apache": $(json_string "$apachePhp"),
   "php_cli": $(json_string "$cliPhp"),
+  "php_instance": $(json_string "$instancePhpVersion"),
+  "php_instance_installed": $(json_bool $(check test "$instancePhp" != "")),
   "bo_login": {"email": $(json_string "$email"), "password": $(json_string "$password")},
   "api_client": {"client_id": $(json_string "$apiClientId"), "client_secret": $(json_string "$apiClientSecret")}
 }
@@ -161,7 +164,13 @@ else
     echo "HTTP status (FO):   n/a (no vhost enabled)"
 fi
 echo "PHP (Apache):       ${apachePhp:--} (switch with sphp)"
-echo "PHP (CLI):          ${cliPhp:--}"
+if test "$instancePhpVersion" = ""; then
+    echo "PHP (CLI):          ${cliPhp:--} (global, pin a version with a .php-version file)"
+elif test "$instancePhp" = ""; then
+    echo "PHP (CLI):          $instancePhpVersion from .php-version, NOT INSTALLED (brew install php@$instancePhpVersion)"
+else
+    echo "PHP (CLI):          ${cliPhp:--} (from .php-version)"
+fi
 echo
 
 echo "BO login:           $email / $password"

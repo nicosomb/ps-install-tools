@@ -74,6 +74,10 @@ Keys in `config.yml`:
 
 `addonsPassword` and `githubToken` are secrets: they only live in the gitignored `config.yml`, never on the command line nor in the shell history. The build uses the current `node` (the builder README asks for node 14 on 8.x and node 20 on 9.x), switch it before running the command if needed.
 
+## PHP version per instance
+
+By default every instance uses the global `php` of the PATH. A `.php-version` file at the root of an instance folder (one line, e.g. `8.1`) pins its PHP version: the scripts then run `composer install`, the install CLI, `bin/console` and every sub process with `$(brew --prefix)/opt/php@<version>/bin/php`, whatever the global version is. A pinned version that is not installed makes the scripts fail with the `brew install` command to run. `ps-infos` shows the PHP of the instance.
+
 ## sudo
 
 Only Apache restarts and `/etc/hosts` edits need `sudo` (`ps-install` on a new instance, `ps-uninstall`, `ps-ngrok`). In a terminal the password is asked as usual. Without a terminal (scripts driven by an AI agent) `run_sudo` in `tools/tools.sh` uses `tools/askpass.sh`: a macOS dialog titled "PrestaShop install tools" asks for the password and states which script needs it and why. Cancelling makes the step fail and prints the command to run manually.

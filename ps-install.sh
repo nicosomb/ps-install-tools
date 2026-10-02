@@ -162,6 +162,10 @@ stepsIndex=$(($stepsIndex+1))
 # 2- Run composer install
 echo "$stepsIndex / $stepsNb: Install vendors"
 cd $targetFolder
+# The folder may have just been created, select the PHP of its .php-version file if any
+use_instance_php
+require_instance_php || exit 1
+echo "PHP used: $instancePhp ($(php -r 'echo PHP_VERSION;'))"
 
 if test -f composer.json; then
     echo "Run composer install"
