@@ -57,11 +57,28 @@ for suffix in $suffixes; do
     http=$(field "$out" "HTTP status (FO)")
     dbExists=$(field "$out" "Database exists")
     vhost=$(field "$out" "Apache vhost" | cut -d' ' -f1)
-    phpApache=$(field "$out" "PHP (Apache)" | cut -d' ' -f1)
+    # Global PHP: version of mod_php when ps-infos found one in httpd.conf
+    phpGlobal=$(field "$out" "PHP (web)" | sed -n 's/.*(mod_php \([0-9.]*\)).*/\1/p')
     folder=$(field "$out" "Project folder")
     rm -f "$out"
 
-    printf "%-14s %-30s %-10s %-6s %s\n" "$suffix" "$branch" "$version" "$http" "$url"
+    # PHP of the instance: the version of its .php-version file served by its PHP-FPM pool, or the global PHP
+    set_target_instance "$suffix"
+    phpClass="ok"
+    if test "$instancePhpVersion" = ""; then
+        php="global${phpGlobal:+ ($phpGlobal)}"
+        phpClass="muted"
+    elif test "$instancePhp" = ""; then
+        php="$instancePhpVersion (not installed)"
+        phpClass="bad"
+    elif test "$(fpm_pool_version "$suffix")" != "$instancePhpVersion"; then
+        php="$instancePhpVersion (no PHP-FPM pool)"
+        phpClass="bad"
+    else
+        php=$instancePhpVersion
+    fi
+
+    printf "%-14s %-30s %-10s %-6s %-14s %s\n" "$suffix" "$branch" "$version" "$http" "$php" "$url"
 
     httpClass="bad"
     test "$http" = "200" && httpClass="ok"
@@ -70,7 +87,7 @@ for suffix in $suffixes; do
     vhostClass="muted"
     test "$vhost" = "Y" && vhostClass="ok"
 
-    rows="$rows<tr><td><strong>$suffix</strong></td><td>$branch</td><td>$version</td><td><a href=\"$url\" target=\"_blank\">front</a> &middot; <a href=\"$adminUrl\" target=\"_blank\">admin</a></td><td class=\"$httpClass\">$http</td><td class=\"$dbClass\">$dbExists</td><td class=\"$vhostClass\">$vhost</td><td>$phpApache</td><td><code>$folder</code></td></tr>"
+    rows="$rows<tr><td><strong>$suffix</strong></td><td>$branch</td><td>$version</td><td><a href=\"$url\" target=\"_blank\">front</a> &middot; <a href=\"$adminUrl\" target=\"_blank\">admin</a></td><td class=\"$httpClass\">$http</td><td class=\"$dbClass\">$dbExists</td><td class=\"$vhostClass\">$vhost</td><td class=\"$phpClass\">$php</td><td><code>$folder</code></td></tr>"
 done
 
 if test "$count" = 0; then

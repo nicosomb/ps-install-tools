@@ -25,7 +25,7 @@ Source `aliases.sh` from your shell profile to get the `ps-*` aliases, or call t
 | Command | What it does |
 | --- | --- |
 | `ps-infos [--json] <s>` | Read-only report: URLs, DBs (existence), folder, git branch, PrestaShop version, dump, vhost, hosts entry, HTTP status, PHP versions, BO login. `--json` prints the same data as JSON for scripts and agents |
-| `ps-list [--json]` | Lists every instance found under `${baseFolder}*` (one line each: branch, version, HTTP status, URL) and writes an HTML report to `~/www/instances.html`. `--json` prints a JSON array of `ps-infos --json` objects instead |
+| `ps-list [--json]` | Lists every instance found under `${baseFolder}*` (one line each: branch, version, HTTP status, PHP of the instance, URL) and writes an HTML report to `~/www/instances.html`. `--json` prints a JSON array of `ps-infos --json` objects instead |
 | `ps-install <s> [branch \| user:branch] [--php <version>]` | Create or update an instance: clone, checkout, composer install, assets build, `tests/UI/.env`, vhost, `/etc/hosts`, DB install, dump, cache warmup |
 | `ps-install-multi-shop <s> [branch]` | `ps-install` then multistore data |
 | `ps-install-classic <s> [version] [--php <version>]` | Build the Classic Edition `<version>` with `smb_edition_builder` (menu of the available versions when omitted or unknown), uninstall the instance if it exists (in the background while the build runs), move the release to the instance folder and `ps-install` it (see below) |
