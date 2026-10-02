@@ -4,7 +4,46 @@ echo "Installing a new local prestashop instance"
 echo
 
 BASEDIR=$(dirname "$0")
+
+# --php <version> pins the PHP version of the instance (.php-version), the other arguments are
+# the suffix and the branch
+phpVersionOption=""
+args=""
+while test $# -gt 0; do
+    case "$1" in
+        --php)
+            phpVersionOption=$2
+            shift
+            ;;
+        --php=*)
+            phpVersionOption=${1#--php=}
+            ;;
+        *)
+            args="$args $1"
+            ;;
+    esac
+    shift
+done
+set -- $args
+
 source $BASEDIR/tools/config.sh
+
+# Check the PHP requirements before anything long happens
+requestedPhpVersion=$phpVersionOption
+if test "$requestedPhpVersion" = ""; then
+    requestedPhpVersion=$instancePhpVersion
+fi
+if test "$requestedPhpVersion" != ""; then
+    if ! php_fpm_binary_for_version "$requestedPhpVersion" > /dev/null; then
+        echo "PHP $requestedPhpVersion with php-fpm is not installed (brew install php@$requestedPhpVersion), installed versions: $(installed_php_versions | xargs)" >&2
+        exit 1
+    fi
+    if ! apache_has_proxy_fcgi; then
+        print_apache_fpm_requirements
+        exit 1
+    fi
+    echo "PHP version:        $requestedPhpVersion"
+fi
 
 echo "Upstream repository: $upstreamGithub"
 echo "Origin repository: $originGithub"
@@ -162,8 +201,12 @@ stepsIndex=$(($stepsIndex+1))
 # 2- Run composer install
 echo "$stepsIndex / $stepsNb: Install vendors"
 cd $targetFolder
-# The folder may have just been created, select the PHP of its .php-version file if any
-use_instance_php
+# The folder may have just been created, pin the requested PHP or select the one of its .php-version file
+if test "$phpVersionOption" != ""; then
+    pin_instance_php "$phpVersionOption"
+else
+    use_instance_php
+fi
 require_instance_php || exit 1
 echo "PHP used: $instancePhp ($(php -r 'echo PHP_VERSION;'))"
 
@@ -207,24 +250,28 @@ if test -f $vhostFilePath; then
     if [ "$matchedDomain" = "" ]; then
         echo Could not find domain in vhost file it needs to be updated
         vhostUpdateNeeded=1
+    elif ! vhost_php_up_to_date $vhostFilePath; then
+        echo Vhost PHP handler does not match the PHP of the instance it needs to be updated
+        vhostUpdateNeeded=1
     fi
 else
     vhostUpdateNeeded=1
 fi
 
+if test "$instancePhpVersion" != ""; then
+    if ! apache_has_proxy_fcgi; then
+        print_apache_fpm_requirements
+        exit 1
+    fi
+    echo "Serve the instance with PHP-FPM $instancePhpVersion"
+    enable_instance_fpm || exit 1
+else
+    disable_instance_fpm
+fi
+
 if [ "$vhostUpdateNeeded" = "1" ]; then
-    baseLog="$HOME/www/var/logs/prestashop-"
     echo "Setting vhost config in $vhostFilePath:"
-    cat > $vhostFilePath <<- EOM
-<VirtualHost *:80>
-    ServerAdmin ${email}
-    DocumentRoot "${targetFolder}"
-    ServerName "${targetDomain}"
-    ServerAlias "${targetDomain}"
-    ErrorLog "${baseLog}${suffix}.error.log"
-    CustomLog "${baseLog}${suffix}.access.log" common
-</VirtualHost>
-EOM
+    write_vhost $vhostFilePath
     echo
     cat $vhostFilePath
     echo

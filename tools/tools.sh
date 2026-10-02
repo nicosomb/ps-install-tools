@@ -1,5 +1,7 @@
 #!/bin/sh
 
+source $BASEDIR/tools/php.sh
+
 parse_yaml() {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
@@ -236,69 +238,20 @@ set_target_instance() {
     use_instance_php
 }
 
-# Prints the Homebrew prefix (/opt/homebrew on Apple silicon, /usr/local on Intel)
-brew_prefix() {
-    if test "$HOMEBREW_PREFIX" != ""; then
-        echo "$HOMEBREW_PREFIX"
-    else
-        brew --prefix 2>/dev/null || echo /opt/homebrew
-    fi
-}
-
-# Prints the path of the PHP binary of the version given as argument (8.1, 8.4, ...), returns 1
-# when this version is not installed. The latest version may only be installed as the php formula
-# (no php@X.Y folder), its binary is used when its version matches.
-php_binary_for_version() {
-    local prefix=$(brew_prefix)
-    if test -x "$prefix/opt/php@$1/bin/php"; then
-        echo "$prefix/opt/php@$1/bin/php"
-        return 0
-    fi
-    if test -x "$prefix/opt/php/bin/php" && test "$("$prefix/opt/php/bin/php" -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')" = "$1"; then
-        echo "$prefix/opt/php/bin/php"
-        return 0
-    fi
-    return 1
-}
-
-# Prints the PHP version (8.1, 8.4, ...) the instance folder given as argument is pinned to in its
-# .php-version file, nothing when the instance uses the global PHP
-get_instance_php_version() {
-    if test -f "$1/.php-version"; then
-        head -n 1 "$1/.php-version" | tr -d '[:space:]'
-    fi
-}
-
-# Selects the PHP of the current instance, called by set_target_instance. When the instance folder
-# has a .php-version file its PHP binary folder is put first in the PATH, so php, composer, the
-# bin/console shebang and every sub process use this version. Otherwise the global PHP is kept.
-# Sets instancePhpVersion (empty for the global PHP) and instancePhp (path of the binary, empty
-# when the pinned version is not installed, see require_instance_php).
-use_instance_php() {
-    # Keep the PATH from before the first call, so successive instances do not stack their folders
-    if test "$basePath" = ""; then
-        basePath=$PATH
-    fi
-    PATH=$basePath
-    instancePhpVersion=$(get_instance_php_version "$targetFolder")
-    if test "$instancePhpVersion" = ""; then
-        instancePhp=$(command -v php)
-    else
-        instancePhp=$(php_binary_for_version "$instancePhpVersion")
-        if test "$instancePhp" != ""; then
-            PATH="$(dirname "$instancePhp"):$PATH"
-        fi
-    fi
-    export PATH
-}
-
-# Returns 1 with an error when the PHP version pinned by the instance is not installed, call it
-# before running PHP for the instance
-require_instance_php() {
-    if test "$instancePhp" = ""; then
-        echo "PHP $instancePhpVersion is required by $targetFolder/.php-version but is not installed (brew install php@$instancePhpVersion)" >&2
-        return 1
-    fi
+# Writes the Apache vhost of the current instance in the file given as argument
+write_vhost() {
+    local baseLog="$HOME/www/var/logs/prestashop-"
+    cat > $1 <<- EOM
+<VirtualHost *:80>
+    ServerAdmin ${email}
+    DocumentRoot "${targetFolder}"
+    ServerName "${targetDomain}"
+    ServerAlias "${targetDomain}"
+    ErrorLog "${baseLog}${suffix}.error.log"
+    CustomLog "${baseLog}${suffix}.access.log" common
+$(php_vhost_handler)
+</VirtualHost>
+EOM
 }
 
 # Returns 0 when the database given as argument exists
