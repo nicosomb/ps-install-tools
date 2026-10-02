@@ -55,8 +55,6 @@ for suffix in $suffixes; do
     url=$(field "$out" "Project url")
     adminUrl=$(field "$out" "Project admin url")
     http=$(field "$out" "HTTP status (FO)")
-    dbExists=$(field "$out" "Database exists")
-    vhost=$(field "$out" "Apache vhost" | cut -d' ' -f1)
     # Global PHP: version of mod_php when ps-infos found one in httpd.conf
     phpGlobal=$(field "$out" "PHP (web)" | sed -n 's/.*(mod_php \([0-9.]*\)).*/\1/p')
     folder=$(field "$out" "Project folder")
@@ -80,19 +78,12 @@ for suffix in $suffixes; do
 
     printf "%-14s %-30s %-10s %-6s %-14s %s\n" "$suffix" "$branch" "$version" "$http" "$php" "$url"
 
-    httpClass="bad"
-    test "$http" = "200" && httpClass="ok"
-    dbClass="muted"
-    test "$dbExists" = "Y" && dbClass="ok"
-    vhostClass="muted"
-    test "$vhost" = "Y" && vhostClass="ok"
-
-    rows="$rows<tr><td><strong>$suffix</strong></td><td>$branch</td><td>$version</td><td><a href=\"$url\" target=\"_blank\">front</a> &middot; <a href=\"$adminUrl\" target=\"_blank\">admin</a></td><td class=\"$httpClass\">$http</td><td class=\"$dbClass\">$dbExists</td><td class=\"$vhostClass\">$vhost</td><td class=\"$phpClass\">$php</td><td><code>$folder</code></td></tr>"
+    rows="$rows<tr><td><strong>$suffix</strong></td><td>$branch</td><td>$version</td><td><a href=\"$url\" target=\"_blank\">front</a> &middot; <a href=\"$adminUrl\" target=\"_blank\">admin</a></td><td class=\"$phpClass\">$php</td><td><code>$folder</code></td></tr>"
 done
 
 if test "$count" = 0; then
     echo "No instance found under ${baseFolder}*"
-    rows="<tr><td colspan=\"8\" class=\"muted\">No instance found under ${baseFolder}*</td></tr>"
+    rows="<tr><td colspan=\"6\" class=\"muted\">No instance found under ${baseFolder}*</td></tr>"
 fi
 
 htmlOut="$HOME/www/instances.html"
@@ -124,7 +115,7 @@ cat > "$htmlOut" <<HTML
 <h1>PrestaShop instances (ps-install-tools)</h1>
 <div class="meta">$count instance(s) under $baseFolder* &middot; generated $generatedAt &middot; regenerate with <code>ps-list</code></div>
 <table>
-<thead><tr><th>Suffix</th><th>Branch</th><th>Version</th><th>Links</th><th>HTTP</th><th>DB</th><th>Vhost</th><th>PHP</th><th>Folder</th></tr></thead>
+<thead><tr><th>Suffix</th><th>Branch</th><th>Version</th><th>Links</th><th>PHP</th><th>Folder</th></tr></thead>
 <tbody>
 $rows
 </tbody>
