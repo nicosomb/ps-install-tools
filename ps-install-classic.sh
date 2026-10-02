@@ -39,6 +39,9 @@ args=""
 while test $# -gt 0; do
     case "$1" in
         --php)
+            if test "$2" = ""; then
+                fail "--php needs a version, for example --php 8.4"
+            fi
             phpVersionOption=$2
             shift
             ;;
@@ -71,6 +74,10 @@ phpVersion=${phpVersionOption:-$instancePhpVersion}
 PATH=$basePath
 
 ## Checks before anything is touched
+# ps-install checks the PHP version too, but only once the instance is uninstalled and built
+if test "$phpVersion" != ""; then
+    check_php_requirements "$phpVersion" || exit 1
+fi
 if test "$editionBuilderFolder" = "" || ! test -f "$editionBuilderFolder/bin/console"; then
     fail "Edition builder not found in '$editionBuilderFolder': editionBuilderFolder in $BASEDIR/config.yml must point to a clone of smb_edition_builder"
 fi

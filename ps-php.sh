@@ -152,7 +152,8 @@ if test "$target" = ""; then
     else
         echo "PHP:                $instancePhpVersion (.php-version)"
         echo "CLI:                ${instancePhp:-NOT INSTALLED}"
-        echo "PHP-FPM pool:       $(fpm_pool_version $suffix | sed 's/^$/none/') ($(instance_fpm_socket))"
+        poolVersion=$(fpm_pool_version $suffix)
+        echo "PHP-FPM pool:       ${poolVersion:-none} ($(instance_fpm_socket))"
         echo "PHP error log:      $(instance_php_log)"
     fi
     echo "Installed versions: $(installed_php_versions | xargs)"
@@ -171,24 +172,29 @@ if test "$target" = "global"; then
     disable_instance_fpm
     unpin_instance_php
 else
-    if ! php_fpm_binary_for_version "$target" > /dev/null; then
-        echo "PHP $target with php-fpm is not installed (brew install php@$target), installed versions: $(installed_php_versions | xargs)" >&2
-        exit 1
-    fi
-    if ! apache_has_proxy_fcgi; then
-        print_apache_fpm_requirements
-        exit 1
-    fi
+    check_php_requirements "$target" || exit 1
     echo "Switching $suffix to PHP $target"
+    previousVersion=$instancePhpVersion
     pin_instance_php "$target"
-    enable_instance_fpm || exit 1
+    if ! enable_instance_fpm; then
+        # Never leave the CLI on a version the web does not serve
+        echo "Could not serve $suffix with PHP-FPM $target, going back to ${previousVersion:-the global PHP}" >&2
+        if test "$previousVersion" = ""; then
+            disable_instance_fpm
+            unpin_instance_php
+        else
+            pin_instance_php "$previousVersion"
+            enable_instance_fpm
+        fi
+        exit 1
+    fi
 fi
 
 # The vhost only changes when the instance goes from the global PHP to a pinned one or back
 vhostFilePath="/opt/homebrew/etc/httpd/extra/sites-available/$targetDomain.conf"
 if test -f "$vhostFilePath" && ! vhost_php_up_to_date "$vhostFilePath"; then
     echo "Updating the PHP handler of the vhost $vhostFilePath"
-    write_vhost "$vhostFilePath"
+    update_vhost_php_handler "$vhostFilePath"
     run_sudo "restart Apache to load the new PHP handler of $targetDomain" brew services restart httpd
 fi
 

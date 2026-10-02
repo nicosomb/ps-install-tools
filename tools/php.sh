@@ -326,6 +326,17 @@ php_vhost_handler() {
 EOM
 }
 
+# Replaces the PHP handler of the vhost file given as argument by the one of the current instance,
+# the other lines (domains changed by ps-ngrok for example) are kept
+update_vhost_php_handler() {
+    PHP_HANDLER="$(php_vhost_handler)" awk '
+        /# PHP of the instance \(\.php-version\)/ { skip = 1 }
+        skip { if (/ProxyTimeout/) skip = 0; next }
+        /<\/VirtualHost>/ && ENVIRON["PHP_HANDLER"] != "" { print ENVIRON["PHP_HANDLER"] }
+        { print }
+    ' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+
 # Returns 0 when the vhost file given as argument matches the PHP of the current instance:
 # it has the handler of its pool when it is pinned, it has none when it uses the global PHP
 vhost_php_up_to_date() {
@@ -339,6 +350,23 @@ vhost_php_up_to_date() {
 # Returns 0 when Apache loads mod_proxy_fcgi, required to serve an instance with PHP-FPM
 apache_has_proxy_fcgi() {
     "$(brew_prefix)/bin/apachectl" -M 2>/dev/null | grep -q 'proxy_fcgi_module'
+}
+
+# Returns 1 with an error when the PHP version given as argument cannot serve an instance: invalid
+# format, not installed with php-fpm, or Apache without mod_proxy_fcgi
+check_php_requirements() {
+    if ! echo "$1" | grep -qE '^[0-9]+\.[0-9]+$'; then
+        echo "Invalid PHP version $1, expected <major>.<minor> (use ps-php <suffix> global to go back to the global PHP)" >&2
+        return 1
+    fi
+    if ! php_fpm_binary_for_version "$1" > /dev/null; then
+        echo "PHP $1 with php-fpm is not installed (brew install php@$1), installed versions: $(installed_php_versions | xargs)" >&2
+        return 1
+    fi
+    if ! apache_has_proxy_fcgi; then
+        print_apache_fpm_requirements
+        return 1
+    fi
 }
 
 # Prints what to do when mod_proxy_fcgi is missing

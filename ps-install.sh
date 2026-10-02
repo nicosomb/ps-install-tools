@@ -12,6 +12,10 @@ args=""
 while test $# -gt 0; do
     case "$1" in
         --php)
+            if test "$2" = ""; then
+                echo "--php needs a version, for example --php 8.4" >&2
+                exit 1
+            fi
             phpVersionOption=$2
             shift
             ;;
@@ -34,18 +38,7 @@ if test "$requestedPhpVersion" = ""; then
     requestedPhpVersion=$instancePhpVersion
 fi
 if test "$requestedPhpVersion" != ""; then
-    if ! echo "$requestedPhpVersion" | grep -qE '^[0-9]+\.[0-9]+$'; then
-        echo "Invalid PHP version $requestedPhpVersion, expected <major>.<minor> (use ps-php <suffix> global to go back to the global PHP)" >&2
-        exit 1
-    fi
-    if ! php_fpm_binary_for_version "$requestedPhpVersion" > /dev/null; then
-        echo "PHP $requestedPhpVersion with php-fpm is not installed (brew install php@$requestedPhpVersion), installed versions: $(installed_php_versions | xargs)" >&2
-        exit 1
-    fi
-    if ! apache_has_proxy_fcgi; then
-        print_apache_fpm_requirements
-        exit 1
-    fi
+    check_php_requirements "$requestedPhpVersion" || exit 1
     echo "PHP version:        $requestedPhpVersion"
 fi
 
@@ -248,6 +241,7 @@ echo
 echo "$stepsIndex / $stepsNb: Prepare apache vhost"
 vhostFilePath="/opt/homebrew/etc/httpd/extra/sites-available/$targetDomain.conf"
 vhostUpdateNeeded=0
+vhostPhpUpdateNeeded=0
 if test -f $vhostFilePath; then
     echo "Vhost config is already available"
     matchedDomain=`cat $vhostFilePath | grep $targetDomain`
@@ -256,7 +250,7 @@ if test -f $vhostFilePath; then
         vhostUpdateNeeded=1
     elif ! vhost_php_up_to_date $vhostFilePath; then
         echo Vhost PHP handler does not match the PHP of the instance it needs to be updated
-        vhostUpdateNeeded=1
+        vhostPhpUpdateNeeded=1
     fi
 else
     vhostUpdateNeeded=1
@@ -279,6 +273,10 @@ if [ "$vhostUpdateNeeded" = "1" ]; then
     echo
     cat $vhostFilePath
     echo
+elif [ "$vhostPhpUpdateNeeded" = "1" ]; then
+    echo "Updating the PHP handler of the vhost $vhostFilePath"
+    update_vhost_php_handler $vhostFilePath
+    vhostUpdateNeeded=1
 fi
 
 enabledVhostFilePath="/opt/homebrew/etc/httpd/extra/sites-enabled/$targetDomain.conf"
