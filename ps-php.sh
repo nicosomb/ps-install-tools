@@ -162,14 +162,14 @@ fi
 
 ## Switch
 
+previousVersion=$instancePhpVersion
 if test "$target" = "global"; then
     echo "Switching $suffix to the global PHP"
-    disable_instance_fpm
+    # The pool stays until Apache no longer proxies to its socket
     unpin_instance_php
 else
     check_php_requirements "$target" || exit 1
     echo "Switching $suffix to PHP $target"
-    previousVersion=$instancePhpVersion
     pin_instance_php "$target"
     if ! enable_instance_fpm; then
         echo "Could not serve $suffix with PHP-FPM $target, going back to ${previousVersion:-the global PHP}" >&2
@@ -188,8 +188,25 @@ fi
 vhostFilePath="/opt/homebrew/etc/httpd/extra/sites-available/$targetDomain.conf"
 if test -f "$vhostFilePath" && ! vhost_php_up_to_date "$vhostFilePath"; then
     echo "Updating the PHP handler of the vhost $vhostFilePath"
+    cp "$vhostFilePath" "$vhostFilePath.bak"
     update_vhost_php_handler "$vhostFilePath"
-    run_sudo "restart Apache to load the new PHP handler of $targetDomain" brew services restart httpd
+    if ! run_sudo "restart Apache to load the new PHP handler of $targetDomain" brew services restart httpd; then
+        mv "$vhostFilePath.bak" "$vhostFilePath"
+        echo "Apache was not restarted, going back to ${previousVersion:-the global PHP} for $suffix" >&2
+        if test "$previousVersion" = ""; then
+            disable_instance_fpm
+            unpin_instance_php
+        else
+            pin_instance_php "$previousVersion"
+            enable_instance_fpm
+        fi
+        exit 1
+    fi
+    rm -f "$vhostFilePath.bak"
+fi
+
+if test "$target" = "global"; then
+    disable_instance_fpm
 fi
 
 clear_cache
