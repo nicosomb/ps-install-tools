@@ -310,7 +310,7 @@ php_vhost_handler() {
     cat <<EOM
     # PHP-FPM pool of the instance (ps-php)
     <FilesMatch \.php$>
-        SetHandler "proxy:unix:$(instance_fpm_socket)|fcgi://$suffix"
+        SetHandler "proxy:unix:$(instance_fpm_socket)|fcgi://ps-$suffix"
     </FilesMatch>
     # Module installs and upgrades take more than 60 seconds
     ProxyTimeout 600
@@ -331,7 +331,7 @@ vhost_php_up_to_date() {
     if test "$instancePhpVersion" = ""; then
         ! grep -q "proxy:unix:" "$1"
     else
-        grep -q "proxy:unix:$(instance_fpm_socket)|" "$1"
+        grep -qF "proxy:unix:$(instance_fpm_socket)|fcgi://ps-$suffix\"" "$1"
     fi
 }
 
